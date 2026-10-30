@@ -2,7 +2,7 @@
   "name": "deepseek-harness-for-vscode",
   "displayName": "DeepSeek Harness for Visual Studio Code",
   "description": "%extension.description%",
-  "version": "0.6.0",
+  "version": "0.6.100",
   "type": "module",
   "publisher": "skymecode",
   "license": "MIT",
@@ -256,6 +256,13 @@
           ],
           "default": "onTurnEnd",
           "description": "%config.worktreeAutoMerge%"
+        },
+        "deepseekHarness.sharedBackendConnectionFile": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "restricted": true,
+          "description": "本机共享后端连接描述文件的绝对路径。远程端仅连接已有桌面后端，不启动或停止它；留空保持原独立后端行为。"
         }
       }
     }

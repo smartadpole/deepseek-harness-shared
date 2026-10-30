@@ -58,6 +58,7 @@ const EMPTY_STATE: ConnectionSettingsState = {
 
 export class ConnectionSettingsService {
   private client: ProviderControlClient | undefined
+  private profileWritable = true
   private stateValue: ConnectionSettingsState = EMPTY_STATE
   private readonly listeners = new Set<Listener>()
 
@@ -83,10 +84,11 @@ export class ConnectionSettingsService {
     return { dispose: () => this.listeners.delete(listener) }
   }
 
-  /** Binds one live Gateway client and imports settings written by older builds. */
-  async connect(client: ProviderControlClient): Promise<void> {
+  /** Attached clients can inspect the owner's profile, but cannot migrate or change it. */
+  async connect(client: ProviderControlClient, profileWritable = true): Promise<void> {
     this.client = client
-    await runMigrations({
+    this.profileWritable = profileWritable
+    if (profileWritable) await runMigrations({
       client,
       configuration: this.configuration,
       legacyCredentials: this.legacyCredentials,
@@ -137,11 +139,15 @@ export class ConnectionSettingsService {
       if (right.id === DEEPSEEK_OFFICIAL_PROVIDER) return 1
       return left.name.localeCompare(right.name)
     })
-    this.setState({ writable: described.writable, providers })
+    this.setState({
+      writable: this.profileWritable && described.writable,
+      providers: this.profileWritable ? providers : providers.map((provider) => ({ ...provider, credentialWritable: false, removable: false })),
+    })
     return this.stateValue
   }
 
   async apply(input: ConnectionSettingsInput): Promise<string> {
+    this.requireProfileWritable()
     const normalized = normalizeInput(input)
     if (normalized.provider === DEEPSEEK_OFFICIAL_PROVIDER) {
       await this.applyOfficial(normalized.baseUrl, normalized.apiKey)
@@ -181,6 +187,7 @@ export class ConnectionSettingsService {
   }
 
   async remove(provider: string): Promise<void> {
+    this.requireProfileWritable()
     if (provider === DEEPSEEK_OFFICIAL_PROVIDER) throw new Error('The built-in provider cannot be removed.')
     const target = this.stateValue.providers.find((item) => item.id === provider)
     if (target === undefined || !target.removable) throw new Error('This provider is not removable.')
@@ -198,6 +205,7 @@ export class ConnectionSettingsService {
   }
 
   async setOfficialApiKey(value: string): Promise<void> {
+    this.requireProfileWritable()
     const normalized = value.trim()
     if (normalized === '') throw new Error('The API Key cannot be empty.')
     await this.requireClient().credentialsSet('DEEPSEEK_API_KEY', normalized)
@@ -205,6 +213,7 @@ export class ConnectionSettingsService {
   }
 
   async clearOfficialApiKey(): Promise<void> {
+    this.requireProfileWritable()
     await this.requireClient().credentialsUnset('DEEPSEEK_API_KEY')
     await this.refresh()
   }
@@ -229,6 +238,10 @@ export class ConnectionSettingsService {
     if (namespace === undefined) throw new Error(`Harness settings namespace "${ns}" is unavailable.`)
     if (!described.writable) throw new Error('Harness settings are read-only.')
     return namespace
+  }
+
+  private requireProfileWritable(): void {
+    if (!this.profileWritable) throw new Error('Change shared backend providers and credentials in the desktop owner window.')
   }
 
   private requireClient(): ProviderControlClient {

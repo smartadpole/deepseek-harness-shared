@@ -15,6 +15,8 @@ permissions:
 
 jobs:
   build:
+    # This inherited workflow is for upstream releases; this fork distributes verified shared-backend assets.
+    if: github.repository == 'skymecode/deepseek-harness-for-vscode'
     name: Build ${{ matrix.target }}
     strategy:
       fail-fast: false
@@ -68,8 +70,9 @@ jobs:
     # Tag pushes create a GitHub Release automatically; manual dispatch does so only when a
     # tag name is supplied, so `github.ref` (a branch) never creates a release.
     if: >-
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && inputs.tag_name != '')
+      github.repository == 'skymecode/deepseek-harness-for-vscode' &&
+      (github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.tag_name != ''))
     runs-on: ubuntu-22.04
     permissions:
       contents: write

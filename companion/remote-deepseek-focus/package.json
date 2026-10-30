@@ -1,0 +1,30 @@
+{
+  "name": "remote-deepseek-focus",
+  "displayName": "Remote DeepSeek Focus",
+  "description": "Automatically open a wide DeepSeek workbench in remote VS Code web sessions.",
+  "version": "0.1.0",
+  "publisher": "hai-local",
+  "engines": {"vscode": "^1.101.0"},
+  "categories": ["Other"],
+  "main": "./extension.cjs",
+  "extensionKind": ["workspace"],
+  "activationEvents": ["onStartupFinished"],
+  "capabilities": {"untrustedWorkspaces": {"supported": false}},
+  "scripts": {"test": "node --test"},
+  "contributes": {
+    "commands": [
+      {"command": "remoteDeepSeekFocus.apply", "title": "聚焦 DeepSeek 工作台", "category": "远程工作台"},
+      {"command": "remoteDeepSeekFocus.restore", "title": "恢复普通布局", "category": "远程工作台"},
+      {"command": "remoteDeepSeekFocus.disable", "title": "关闭自动聚焦", "category": "远程工作台"}
+    ],
+    "configuration": {
+      "title": "Remote DeepSeek Focus",
+      "properties": {
+        "remoteDeepSeekFocus.enabled": {
+          "type": "boolean", "default": true, "scope": "window",
+          "description": "连接远程网页 VS Code 后自动打开 DeepSeek 主编辑区并收起边栏。仅网页远程端生效；下次重新打开窗口应用。"
+        }
+      }
+    }
+  }
+}

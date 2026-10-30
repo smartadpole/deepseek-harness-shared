@@ -10,6 +10,20 @@ interface HarnessDocument {
 }
 
 describe('ConnectionSettingsService', () => {
+  it('attached clients read provider state without migrating desktop configuration', async () => {
+    const harness = fakeHarness()
+    const before = JSON.stringify(harness.document)
+    const service = serviceFor([], 'https://relay.example/v1', 'legacy-secret')
+    await service.connect(harness.client as never, false)
+    expect(service.state.writable).toBe(false)
+    expect(service.state.providers.every((provider) => !provider.credentialWritable && !provider.removable)).toBe(true)
+    await expect(service.setOfficialApiKey('test')).rejects.toThrow('desktop')
+    await expect(service.clearOfficialApiKey()).rejects.toThrow('desktop')
+    await expect(service.remove('relay')).rejects.toThrow('desktop')
+    await expect(service.apply({ provider: 'deepseek', name: 'DeepSeek', baseUrl: 'https://api.deepseek.com', apiKey: 'test', models: [] })).rejects.toThrow('desktop')
+    expect(JSON.stringify(harness.document)).toBe(before)
+  })
+
   it('creates a live pi-ai route and stores its key write-only', async () => {
     const harness = fakeHarness()
     const service = serviceFor()

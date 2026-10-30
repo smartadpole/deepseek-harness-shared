@@ -14,6 +14,7 @@ import { renderOverlay } from './runtime-overlay.js'
 import { sharedHistoryHome } from './shared-history/paths.js'
 import { runHistoryMigration } from './shared-history/runner.js'
 import { historyCompression as detectHistoryCompression } from './shared-history/encoding.js'
+import { resolveSharedBackend } from './shared-backend.js'
 import { LAST_SESSION_STATE_KEY } from '../domain/session-selection.js'
 
 const START_TIMEOUT_MS = 90_000
@@ -50,8 +51,13 @@ export class HarnessHostRuntime implements vscode.Disposable {
   private stateValue: HostRuntimeState = { phase: 'idle' }
   private preparationAbort: AbortController | undefined
   private sharedHistoryValue = false
+  private attachedValue = false
+  private attachmentRefresh: Promise<string> | undefined
+  private attachmentAbort: AbortController | undefined
+  private attachmentCheckedAt = 0
 
   get sharedHistory(): boolean { return this.sharedHistoryValue }
+  get attached(): boolean { return this.attachedValue || !!this.configuration.get().sharedBackendConnectionFile }
 
   readonly onDidChangeState = this.stateEmitter.event
 
@@ -81,13 +87,16 @@ export class HarnessHostRuntime implements vscode.Disposable {
     this.setState({ phase: 'starting' })
     const abort = new AbortController()
     this.preparationAbort = abort
-    const task = this.spawnRuntime(workspace, configuration, abort.signal)
+    this.attachedValue = !!configuration.sharedBackendConnectionFile
+    const task = configuration.sharedBackendConnectionFile
+      ? this.attachRuntime(configuration.sharedBackendConnectionFile, workspace, abort.signal)
+      : this.spawnRuntime(workspace, configuration, abort.signal)
     this.startTask = task
     try {
       return await task
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      this.setState({ phase: 'error', error: message })
+      if (!abort.signal.aborted) this.setState({ phase: 'error', error: message })
       throw error
     } finally {
       if (this.startTask === task) this.startTask = undefined
@@ -108,6 +117,32 @@ export class HarnessHostRuntime implements vscode.Disposable {
   dispose(): void {
     void this.stop()
     this.stateEmitter.dispose()
+  }
+
+  /** Re-resolves desktop startup logs after the owner restarts; never starts or stops that process. */
+  async refreshAttachment(): Promise<string> {
+    const file = this.configuration.get().sharedBackendConnectionFile
+    if (!file) throw new Error('Shared backend connection is not configured.')
+    if (this.attachmentRefresh !== undefined) return this.attachmentRefresh
+    if (Date.now() - this.attachmentCheckedAt < 1500 && this.stateValue.phase === 'ready' && this.stateValue.url !== undefined) return this.stateValue.url
+    const abort = new AbortController()
+    this.attachmentAbort = abort
+    const task = this.attachRuntime(file, workspaceDirectory(), abort.signal)
+    this.attachmentRefresh = task
+    try { return await task } finally {
+      if (this.attachmentRefresh === task) this.attachmentRefresh = undefined
+      if (this.attachmentAbort === abort) this.attachmentAbort = undefined
+    }
+  }
+
+  private async attachRuntime(file: string, workspace: string, signal: AbortSignal): Promise<string> {
+    const backend = await resolveSharedBackend(file, workspace)
+    signal.throwIfAborted()
+    this.sharedHistoryValue = true
+    this.attachmentCheckedAt = Date.now()
+    if (this.stateValue.url !== backend.url) this.output.appendLine(`[attach] Connected to existing desktop owner PID ${backend.pid}; no child runtime started.`)
+    this.setState({ phase: 'ready', url: backend.url })
+    return backend.url
   }
 
   private async spawnRuntime(
@@ -281,6 +316,10 @@ export class HarnessHostRuntime implements vscode.Disposable {
   }
 
   private async performStop(): Promise<void> {
+    this.attachmentAbort?.abort()
+    this.attachmentAbort = undefined
+    this.attachmentRefresh = undefined
+    this.attachmentCheckedAt = 0
     this.preparationAbort?.abort()
     this.preparationAbort = undefined
     const child = this.child

@@ -107,7 +107,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     runtime,
     gateway,
     notifications,
-    gateway.onDidCompleteTurn((notice) => notifications.complete(notice)),
+    gateway.onDidCompleteTurn((notice) => { if (!runtime.attached) notifications.complete(notice) }),
     worktrees,
     pluginCenter,
     editorSelection,
@@ -143,7 +143,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // bar. Seed in the background after the first successful connect and
   // restart the runtime once through mutateRuntime so the profile change
   // takes effect cleanly.
-  void seedDefaultPluginsAfterConnect(pluginManager, gateway, output)
+  if (!runtime.attached) void seedDefaultPluginsAfterConnect(pluginManager, gateway, output)
 }
 
 /**

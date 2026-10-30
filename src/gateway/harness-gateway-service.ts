@@ -80,6 +80,8 @@ export class HarnessGatewayService implements vscode.Disposable {
   private readonly completions = new TurnCompletionTracker()
   private readonly runtimeSubscription: vscode.Disposable
   private client: NodeGatewayClient | undefined
+  private connectionUrl: string | undefined
+  private attachedRefresh: Promise<void> | undefined
   private streamAbort: AbortController | undefined
   private followAbort: AbortController | undefined
   /** Per-session follow cursor (the snapshot `cursor` handed to session/page). */
@@ -222,6 +224,7 @@ export class HarnessGatewayService implements vscode.Disposable {
       // baseline budget below.
       const url = await this.runtime.start()
       this.client = this.createGatewayClient(url)
+      this.connectionUrl = url
       // Baseline watchdog: the gateway process is up, but one of the
       // post-boot RPCs (probe, provider/settings/models describe, session
       // list) may still hang forever — e.g. a misconfigured custom provider
@@ -258,7 +261,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     this.output.appendLine('[baseline] probe…')
     await client.probe()
     this.output.appendLine('[baseline] probe ok, connect…')
-    await this.connectionSettings.connect(client)
+    await this.connectionSettings.connect(client, !this.runtime.attached)
     this.output.appendLine('[baseline] connect ok, streams…')
     this.startEventStreams()
     // The VSCode Memento can be rebuilt empty (state.vscdb), which wipes the
@@ -275,7 +278,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     this.output.appendLine('[baseline] lists ok, sweep…')
     // Sweep worktrees whose session no longer exists (crash between worktree
     // add and session create, or a session removed out-of-band).
-    void this.cleanupOrphanWorktrees()
+    if (!this.runtime.attached) void this.cleanupOrphanWorktrees()
     // Resume the user's last open session first; only fall back to the most
     // recent history entry, and only create a blank session when no history
     // exists at all. A reload/reinstall must never silently open a different
@@ -295,7 +298,7 @@ export class HarnessGatewayService implements vscode.Disposable {
         // The user can still create a new session and inspect the log.
         this.output.appendLine(vscode.l10n.t('[gateway] Failed to load recent sessions: {0}', errorMessage(cause)))
       }
-    } else {
+    } else if (!this.runtime.attached) {
       // No session to resume: open a fresh blank one so the model and
       // permission selectors are usable before the first message is sent.
       // Blank sessions are archivable and never pollute the history.
@@ -335,6 +338,7 @@ export class HarnessGatewayService implements vscode.Disposable {
 
   /** Stops the Host around profile mutations, then reconnects even on failure. */
   async mutateRuntime<T>(mutation: () => Promise<T>): Promise<T> {
+    if (this.runtime.attached) throw new Error('Plugin/profile changes must be made in the desktop owner. The shared backend was not stopped.')
     this.disconnect()
     await this.runtime.stop()
     try {
@@ -470,7 +474,9 @@ export class HarnessGatewayService implements vscode.Disposable {
     // shared workspace folder.
     const sessionId = newSessionId()
     const baseCwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()
-    const prepared = await this.worktrees.prepare(sessionId, baseCwd)
+    const prepared = this.runtime.attached
+      ? { cwd: baseCwd, isolated: false, reason: undefined }
+      : await this.worktrees.prepare(sessionId, baseCwd)
     let created
     try {
       created = await client.sessionCreate({ cwd: prepared.cwd, sessionId: sessionId as SessionId, agentPreset: selectedPreset })
@@ -679,7 +685,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     // A never-written blank draft is not history: when the user switches away,
     // archive it so the draft does not accumulate in the history list.
     const leaving = this.activeSessionId
-    if (leaving !== undefined && leaving !== sessionId) {
+    if (!this.runtime.attached && leaving !== undefined && leaving !== sessionId) {
       const leavingSummary = this.summaries.get(leaving)
       if (leavingSummary?.blank === true) {
         await this.archives.archive(leaving, (id) => this.summaries.has(id)).catch((cause: unknown) => {
@@ -828,7 +834,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     // move the conversation into a fresh isolated worktree when the shared
     // checkout is clean; a dirty checkout is left alone (migrating would
     // strand its uncommitted changes outside the new worktree).
-    if (this.subagentAddress === undefined && !this.isSessionIsolated(sessionId)) {
+    if (!this.runtime.attached && this.subagentAddress === undefined && !this.isSessionIsolated(sessionId)) {
       await this.migrateUnisolatedSession(sessionId)
       // createSession() inside the migration switches the active session, so
       // the subsequent requireActiveSession() below already resolves the new id.
@@ -1296,6 +1302,7 @@ export class HarnessGatewayService implements vscode.Disposable {
    * and a conflicting merge leaves the worktree intact for manual triage.
    */
   private maybeAutoMergeWorktree(sessionId: string): void {
+    if (this.runtime.attached) return
     if (this.configuration.get().worktreeAutoMerge !== 'onTurnEnd') return
     if (this.worktrees.recordFor(sessionId) === undefined) return
     if (this.autoMergingSessions.has(sessionId)) return
@@ -1912,6 +1919,7 @@ export class HarnessGatewayService implements vscode.Disposable {
    * never overwritten by a later message.
    */
   private maybeAutoTitle(sessionId: string, event: HistoryEntry['event']): void {
+    if (this.runtime.attached) return
     if (event.type !== 'user/message') return
     const source = event.data?.source
     if (source?.kind !== 'user') return
@@ -1956,6 +1964,19 @@ export class HarnessGatewayService implements vscode.Disposable {
     this.fireChange()
   }
 
+  private async refreshAttachedConnection(): Promise<void> {
+    if (this.attachedRefresh !== undefined) return this.attachedRefresh
+    const task = (async () => {
+      const url = await this.runtime.refreshAttachment()
+      if (url === this.connectionUrl || this.streamAbort?.signal.aborted !== false) return
+      this.client = this.createGatewayClient(url)
+      this.connectionUrl = url
+      await this.connectionSettings.connect(this.client, false)
+    })()
+    this.attachedRefresh = task
+    try { await task } finally { if (this.attachedRefresh === task) this.attachedRefresh = undefined }
+  }
+
   private async waitToReconnect(signal: AbortSignal): Promise<void> {
     this.phase = 'reconnecting'
     this.fireChange()
@@ -1967,6 +1988,10 @@ export class HarnessGatewayService implements vscode.Disposable {
       }, { once: true })
     })
     if (!signal.aborted) {
+      if (this.runtime.attached) {
+        try { await this.refreshAttachedConnection() }
+        catch { this.error = 'Desktop DeepSeek backend is unavailable. Reopen its workbench to reconnect.'; this.fireChange(); return }
+      }
       await this.refreshSessionList().catch((cause: unknown) => {
         this.output.appendLine(vscode.l10n.t('[gateway] Failed to refresh the reconnect baseline: {0}', errorMessage(cause)))
       })
@@ -1991,6 +2016,7 @@ export class HarnessGatewayService implements vscode.Disposable {
     this.streamAbort = undefined
     this.interactions.disconnect()
     this.client = undefined
+    this.connectionUrl = undefined
     this.connectionSettings.disconnect()
     this.phase = 'idle'
     // A new connection must re-establish the official archive baseline: bump

@@ -33,6 +33,7 @@ export type WorktreeAutoMergeMode = 'never' | 'onTurnEnd'
 /** Immutable settings used by the bundled official Harness Web runtime. */
 export interface HarnessConfiguration {
   /** Official DSH home whose sessions/attachments are shared; runtime profiles stay private. */
+  readonly sharedBackendConnectionFile?: string
   readonly historyHome?: string
   readonly model: ModelId
   readonly reasoningEffort: ReasoningEffort
@@ -69,6 +70,7 @@ export class ConfigurationService implements vscode.Disposable {
 
     return {
       historyHome: config.get<string>('historyHome', '').trim(),
+      ...(config.get<string>('sharedBackendConnectionFile', '').trim() ? { sharedBackendConnectionFile: config.get<string>('sharedBackendConnectionFile', '').trim() } : {}),
       model: modelId(config.get<string>('model')),
       reasoningEffort: reasoningEffort(config.get<string>('reasoningEffort')),
       agentPreset: agentPresetId(config.get<string>('agentPreset')),
@@ -194,6 +196,7 @@ export class ConfigurationService implements vscode.Disposable {
 
 const RUNTIME_SETTING_KEYS = [
   'deepseekHarness.historyHome',
+  'deepseekHarness.sharedBackendConnectionFile',
   'deepseekHarness.model',
   'deepseekHarness.reasoningEffort',
   'deepseekHarness.agentPreset',

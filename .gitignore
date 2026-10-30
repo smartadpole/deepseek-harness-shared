@@ -1,4 +1,4 @@
-node_modules/
+/node_modules
 dist/
 coverage/
 *.vsix
@@ -6,3 +6,6 @@ coverage/
 *.zip
 .claude/
 .commandcode/
+
+# Private operating records do not belong in the public distribution.
+docs/local-shared-backend/

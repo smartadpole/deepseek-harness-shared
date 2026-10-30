@@ -795,3 +795,69 @@ describe('start baseline watchdog', () => {
     }
   })
 })
+
+describe('shared backend attachment', () => {
+  it('swaps to a restarted owner once and never restores a disconnected service', async () => {
+    const { service, runtime, client } = createService()
+    const next = { ...client }
+    const refreshAttachment = vi.fn().mockResolvedValue('http://127.0.0.1:41002/?token=new')
+    Object.assign(runtime, { attached: true, refreshAttachment })
+    const internal = service as unknown as {
+      streamAbort: AbortController; connectionUrl: string; createGatewayClient: ReturnType<typeof vi.fn>;
+      connectionSettings: { connect: ReturnType<typeof vi.fn> }; refreshAttachedConnection(): Promise<void>
+    }
+    internal.streamAbort = new AbortController()
+    internal.connectionUrl = 'http://127.0.0.1:41001/?token=old'
+    internal.createGatewayClient = vi.fn(() => next)
+    await Promise.all([internal.refreshAttachedConnection(), internal.refreshAttachedConnection()])
+    expect(refreshAttachment).toHaveBeenCalledTimes(1)
+    expect(service.client).toBe(next)
+    expect(internal.connectionSettings.connect).toHaveBeenCalledWith(next, false)
+    internal.streamAbort.abort()
+    refreshAttachment.mockResolvedValue('http://127.0.0.1:41003/?token=later')
+    await internal.refreshAttachedConnection()
+    expect(internal.createGatewayClient).toHaveBeenCalledTimes(1)
+  })
+  it('does not archive the desktop draft merely when browsing to another conversation', async () => {
+    const { service, runtime, client } = createService()
+    Object.assign(runtime, { attached: true })
+    service.summaries.set('s1', { running: false, blank: true, agentPreset: 'standard', updatedAt: 1 })
+    service.summaries.set('s2', { running: false, blank: false, agentPreset: 'standard', updatedAt: 2 })
+    await (service as unknown as HarnessGatewayService).selectSession('s2')
+    expect(client.workspaceArchiveSession).not.toHaveBeenCalled()
+  })
+  it('creates shared sessions without a second client owning their worktree', async () => {
+    const { service, runtime, worktrees, client } = createService()
+    Object.assign(runtime, { attached: true })
+    client.sessionList.mockResolvedValue([
+      { sessionId: 's1', running: false, blank: false, agentPreset: 'standard', updatedAt: 1 },
+      { sessionId: 's2', running: false, blank: true, agentPreset: 'standard', updatedAt: 2 },
+    ])
+    await service.createSession()
+    expect(worktrees.prepare).not.toHaveBeenCalled()
+    expect(client.sessionCreate).toHaveBeenCalledWith(expect.objectContaining({ cwd: process.cwd() }))
+  })
+  it('does not repeat owner auto-merge on the same turn end', async () => {
+    const { service, runtime, worktrees } = createService({ worktreeAutoMerge: 'onTurnEnd' })
+    Object.assign(runtime, { attached: true })
+    service.handleFollowFrame('s1', turnEndFrame('s1'))
+    await tick()
+    expect(worktrees.mergeBack).not.toHaveBeenCalled()
+  })
+  it('refuses profile mutation before stopping or changing the shared owner', async () => {
+    const { service, runtime } = createService()
+    Object.assign(runtime, { attached: true })
+    const mutation = vi.fn()
+    await expect((service as unknown as HarnessGatewayService).mutateRuntime(mutation)).rejects.toThrow(/desktop|owner/i)
+    expect(runtime.stop).not.toHaveBeenCalled()
+    expect(mutation).not.toHaveBeenCalled()
+  })
+  it('continues the chosen unisolated session instead of silently making another one', async () => {
+    const { service, runtime, worktrees, client } = createService()
+    Object.assign(runtime, { attached: true })
+    worktrees.recordFor!.mockReturnValue(undefined)
+    await service.sendPrompt('continue here')
+    expect(client.sessionCreate).not.toHaveBeenCalled()
+    expect(client.sessionPrompt).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 's1' }))
+  })
+})
