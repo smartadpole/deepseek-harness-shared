@@ -40,21 +40,11 @@ VSCODE_CLI='/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code
 ls "$HOME"/.vscode/cli/servers/Stable-*/server/bin/code-server
 ```
 
-选取本次隧道实际使用版本的CLI。如果出现多个版本，结合 `~/.vscode/cli/tunnel-service.log` 确认当前版本，不随便选一个。把该路径填入变量：
-
-```sh
-REMOTE_CODE_SERVER='/实际server路径/bin/code-server'
-"$REMOTE_CODE_SERVER" --extensions-dir "$HOME/.vscode-server/extensions" \
-  --install-extension '/实际路径/deepseek-harness-0.6.100-darwin-arm64.vsix' --force
-"$REMOTE_CODE_SERVER" --extensions-dir "$HOME/.vscode-server/extensions" \
-  --install-extension '/实际路径/remote-deepseek-focus-0.1.0.vsix'
-```
-
-布局助手可省略。**这里必须用远程server CLI，不能把0.6.100装到负责执行任务的桌面宿主。** 不需重启隧道或桌面后端。
+选取本次隧道实际使用版本的CLI。如果出现多个版本，结合隧道日志确认当前版本。先完成下一步私有绑定，再安装远程插件，确保首次激活就使用attach模式。
 
 ### 4. 绑定此Mac的项目
 
-以下命令在Mac终端执行。先把第一行换为自己的项目绝对路径；使用标准JSON读写，若现有settings.json包含JSONC注释会停止并保留原文件，此时可在远程“打开远程设置(JSON)”里手动添加同名键。
+以下命令在Mac终端执行。先把第一行换为自己的项目绝对路径；使用标准JSON读写，若现有settings.json包含JSONC注释会停止并保留原文件，此时先手工创建描述文件（内容为 `{"version":1,"workspace":"你的项目绝对路径"}`，权限0600），再在远程“打开远程设置(JSON)”里手动添加描述文件绝对路径对应的同名键。
 
 ```sh
 PROJECT='/你的项目绝对路径'
@@ -92,7 +82,21 @@ PY
 
 当前绑定适用于一个项目，其他目录会拒绝连接。切换项目时先按实际项目与owner重配描述文件，不能把所有窗口强行指向同一个后端。
 
-### 5. 刷新浏览器并验收
+### 5. 安装远程客户端
+
+选取本次隧道实际使用版本的CLI。如果出现多个版本，结合 `~/.vscode/cli/tunnel-service.log` 确认当前版本，不随便选一个。把该路径填入变量：
+
+```sh
+REMOTE_CODE_SERVER='/实际server路径/bin/code-server'
+"$REMOTE_CODE_SERVER" --extensions-dir "$HOME/.vscode-server/extensions" \
+  --install-extension '/实际路径/deepseek-harness-0.6.100-darwin-arm64.vsix' --force
+"$REMOTE_CODE_SERVER" --extensions-dir "$HOME/.vscode-server/extensions" \
+  --install-extension '/实际路径/remote-deepseek-focus-0.1.0.vsix'
+```
+
+布局助手可省略。**这里必须用远程server CLI，不能把0.6.100装到负责执行任务的桌面宿主。** 不需重启隧道或桌面后端。
+
+### 6. 刷新浏览器并验收
 
 1. 手机刷新远程窗口，打开原对话，确认状态和桌面一致。
 2. 桌面正常产生新输出时，确认手机持续更新。
