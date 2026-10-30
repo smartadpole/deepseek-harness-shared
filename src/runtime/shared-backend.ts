@@ -10,6 +10,16 @@ const run = promisify(execFile)
 export interface SharedBackend { readonly url: string; readonly pid: number }
 export interface SharedBackendDescriptor { readonly version: 1; readonly workspace: string; readonly preferredPid?: number }
 
+/** VSIX installs may omit the platform suffix that Marketplace installs carry. */
+export function isDesktopOwnerCommand(command: string, home = homedir()): boolean {
+  const prefix = path.join(home, '.vscode', 'extensions', 'skymecode.deepseek-harness-for-vscode-0.6.0')
+  return ['', '-darwin-arm64', '-darwin-x64'].some((suffix) => {
+    const root = prefix + suffix
+    return command.startsWith(`${root}/node_modules/node/bin/node `)
+      && command.includes(`${root}/node_modules/@deepseek-ai/dsh/lib/bin.js web `)
+  })
+}
+
 /** The descriptor contains no launch token. Authentication is read from the owner's private logs at connect time. */
 export async function readSharedBackendDescriptor(file: string, workspace: string): Promise<SharedBackendDescriptor> {
   if (!path.isAbsolute(file)) throw new Error('Shared backend descriptor must be an absolute path.')
@@ -81,12 +91,11 @@ export async function resolveSharedBackend(file: string, workspace: string): Pro
   const descriptor = await readSharedBackendDescriptor(file, workspace)
   const { stdout: processes } = await run('/bin/ps', ['-axo', 'pid=,uid=,command='], { timeout: 5000, maxBuffer: 4 * 1024 * 1024 })
   const pids: number[] = []
-  const desktopPrefix = path.join(homedir(), '.vscode', 'extensions', 'skymecode.deepseek-harness-for-vscode-0.6.0-')
   for (const line of processes.split('\n')) {
     const row = /^\s*(\d+)\s+(\d+)\s+(.+)$/u.exec(line)
     if (row === null || Number(row[2]) !== process.getuid?.()) continue
     const command = row[3] ?? ''
-    if (command.startsWith(desktopPrefix) && command.includes('/node_modules/@deepseek-ai/dsh/lib/bin.js web ')) pids.push(Number(row[1]))
+    if (isDesktopOwnerCommand(command)) pids.push(Number(row[1]))
   }
   const listeners = new Map<string, number>()
   for (const pid of pids) {

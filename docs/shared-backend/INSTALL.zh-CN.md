@@ -8,13 +8,13 @@
 
 ### 1. 下载并核对
 
-从 [shared-v0.6.100 Release](https://github.com/smartadpole/deepseek-harness-shared/releases/tag/shared-v0.6.100) 下载三个VSIX和SHA256SUMS，保存在该Mac约定的工具目录。在包含这些文件的目录运行：
+从 [shared-v0.6.101 Release](https://github.com/smartadpole/deepseek-harness-shared/releases/tag/shared-v0.6.101) 下载远程/布局助手两个VSIX和SHA256SUMS，并从[基础发行包](https://github.com/smartadpole/deepseek-harness-shared/releases/download/shared-v0.6.100/deepseek-harness-owner-0.6.0-darwin-arm64.vsix)下载桌面owner VSIX，保存在该Mac约定的工具目录。在包含这些文件的目录运行：
 
 ```sh
 shasum -a 256 -c SHA256SUMS
 ```
 
-此版本固定桌面0.6.0。新主机尚未使用DeepSeek时可按下文安装；已有更高版本或V4历史时，先做版本/历史兼容评估，不能直接用 `--force` 降级现用桌面profile。安装到远程宿主的0.6.100也不会替你迁移桌面profile。
+此版本固定桌面0.6.0。新主机尚未使用DeepSeek时可按下文安装；已有更高版本或V4历史时，先做版本/历史兼容评估，不能直接用 `--force` 降级现用桌面profile。安装到远程宿主的0.6.101也不会替你迁移桌面profile。
 
 ### 2. 桌面安装owner，启用远程入口
 
@@ -89,12 +89,12 @@ PY
 ```sh
 REMOTE_CODE_SERVER='/实际server路径/bin/code-server'
 "$REMOTE_CODE_SERVER" --extensions-dir "$HOME/.vscode-server/extensions" \
-  --install-extension '/实际路径/deepseek-harness-0.6.100-darwin-arm64.vsix' --force
+  --install-extension '/实际路径/deepseek-harness-0.6.101-darwin-arm64.vsix' --force
 "$REMOTE_CODE_SERVER" --extensions-dir "$HOME/.vscode-server/extensions" \
   --install-extension '/实际路径/remote-deepseek-focus-0.1.0.vsix'
 ```
 
-布局助手可省略。**这里必须用远程server CLI，不能把0.6.100装到负责执行任务的桌面宿主。** 不需重启隧道或桌面后端。
+布局助手可省略。**这里必须用远程server CLI，不能把0.6.101装到负责执行任务的桌面宿主。** 不需重启隧道或桌面后端。
 
 ### 6. 刷新浏览器并验收
 
@@ -118,7 +118,7 @@ REMOTE_CODE_SERVER='/实际server路径/bin/code-server'
 | 现象 | 检查 |
 |---|---|
 | 一直Connecting | 先看隧道Connected、远程组件下载和extension host是否启动 |
-| 手机仍显示会话占用/失败 | 核对远程版本0.6.100、描述路径和 `[attach]` 日志；通常仍加载旧独立后端 |
+| 手机仍显示会话占用/失败 | 核对远程版本0.6.101、描述路径和 `[attach]` 日志；通常仍加载旧独立后端 |
 | No running desktop backend | 桌面0.6.0工作台是否打开、项目是否匹配；不要启动第二个竞争后端 |
 | Multiple desktop backends | 相同项目多个桌面owner；核对目标PID后显式绑定 |
 | workspace does not match | 远程窗口与描述文件是否指向同一项目真实目录 |

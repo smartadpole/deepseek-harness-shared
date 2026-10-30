@@ -2,9 +2,9 @@
 
 手机与桌面共用一个 DeepSeek Harness 执行后端：实时查看同一段对话的进度，并从任一端继续工作。
 
-这是 [skymecode/deepseek-harness-for-vscode](https://github.com/skymecode/deepseek-harness-for-vscode) **v0.6.0 的社区定制分支**，不是 DeepSeek 官方发行版。保留上游 MIT 许可。当前发布版本 **0.6.100**。
+这是 [skymecode/deepseek-harness-for-vscode](https://github.com/skymecode/deepseek-harness-for-vscode) **v0.6.0 的社区定制分支**，不是 DeepSeek 官方发行版。保留上游 MIT 许可。当前发布版本 **0.6.101**。
 
-**[下载安装包](https://github.com/smartadpole/deepseek-harness-shared/releases/tag/shared-v0.6.100)** · **[部署与使用手册](docs/shared-backend/INSTALL.zh-CN.md)** · **[架构和验证边界](docs/shared-backend/DESIGN.md)** · [上游原说明](README.upstream.zh-CN.md)
+**[下载安装包](https://github.com/smartadpole/deepseek-harness-shared/releases/tag/shared-v0.6.101)** · **[部署与使用手册](docs/shared-backend/INSTALL.zh-CN.md)** · **[架构和验证边界](docs/shared-backend/DESIGN.md)** · [上游原说明](README.upstream.zh-CN.md)
 
 ## 解决什么问题
 
@@ -18,7 +18,7 @@
 |---|---|
 | 执行主机 | macOS Apple Silicon，桌面 DeepSeek 扩展固定0.6.0 |
 | 远程客户端 | 手机、平板或电脑浏览器，通过 VS Code Remote Tunnels 连接同一主机 |
-| 远程扩展 | 本项目0.6.100，仅安装到远程 VS Code Server |
+| 远程扩展 | 本项目0.6.101，仅安装到远程 VS Code Server |
 | 手机布局 | 可选 Remote DeepSeek Focus 0.1.0 自动打开宽屏主编辑区 |
 | Windows / Linux / Intel Mac作为执行主机 | 本发布未提供相应安装包；共享后端发现只实现macOS |
 
@@ -26,10 +26,10 @@
 
 ## 发布资产
 
-- `deepseek-harness-owner-0.6.0-darwin-arm64.vsix`：上游原版桌面owner，原始文件未修改。
-- `deepseek-harness-0.6.100-darwin-arm64.vsix`：远程attach客户端，复用相同平台运行依赖。
+- [桌面owner原0.6.0安装包](https://github.com/smartadpole/deepseek-harness-shared/releases/download/shared-v0.6.100/deepseek-harness-owner-0.6.0-darwin-arm64.vsix)：沿用基础发行包，原始文件未修改。
+- `deepseek-harness-0.6.101-darwin-arm64.vsix`：远程attach客户端，复用相同平台运行依赖。
 - `remote-deepseek-focus-0.1.0.vsix`：可选手机布局助手；源码在 `companion/remote-deepseek-focus/`。
-- `SHA256SUMS`：上述安装包的校验值。
+- `SHA256SUMS`：三个安装包的校验值；桌面owner从上述基础包链接下载到同一目录。
 
 两个DeepSeek包保留相同extension ID，分别安装在**桌面**和**远程**两个宿主，不能在同一宿主并装。GitHub Releases 是本项目的分发入口；未发布到 VS Code Marketplace。
 
